@@ -18,6 +18,9 @@
   #speed{font-size:26px;font-weight:700;line-height:1}
   #speed small{font-size:11px;font-weight:500;opacity:.75}
   #location{font-size:11px;opacity:.78;margin-top:4px}
+  #damage{font-size:10px;opacity:.8;margin-top:3px}
+  #gear{font-size:11px;font-weight:700;opacity:.8;margin-top:3px}
+  #reverse{height:54px;width:64px;border-radius:18px;font-size:12px}
   #bottom{position:absolute;left:14px;right:14px;bottom:18px;display:flex;justify-content:space-between;align-items:flex-end}
   .cluster{display:flex;gap:10px;align-items:flex-end;pointer-events:auto}
   .control{width:66px;height:66px;border-radius:22px;display:flex;align-items:center;justify-content:center;font-size:25px;font-weight:700;user-select:none;-webkit-user-select:none;touch-action:none;color:white}
@@ -39,10 +42,10 @@
 <div id="hud">
   <div id="top">
     <div id="brand" class="glass"><strong>QUIET DRIVE</strong><small>open road · prototype</small></div>
-    <div id="stats" class="glass"><div id="speed">0 <small>km/h</small></div><div id="location">Free roam</div></div>
+    <div id="stats" class="glass"><div id="speed">0 <small>km/h</small></div><div id="location">Free roam</div><div id="gear">GEAR: D</div><div id="damage">Vehicle condition: 100%</div></div>
   </div>
   <div id="settings"><button class="glass" id="openSettings">☼ Settings</button></div>
-  <div id="hint" class="glass">Giữ ▲ để chạy · ◀ ▶ để lái · ▼ để phanh</div>
+  <div id="hint" class="glass">DRIVE chạy · R số lùi · giữ ◀ ▶ để lái · BRAKE phanh</div>
   <div id="bottom">
     <div class="cluster">
       <div class="control glass" id="left">◀</div>
@@ -51,6 +54,7 @@
     <div class="cluster">
       <div class="control pedal glass" id="brake">BRAKE</div>
       <div class="control pedal glass" id="gas">DRIVE</div>
+      <div class="control glass" id="reverse">R</div>
     </div>
   </div>
   <div id="panel" class="glass">
@@ -94,8 +98,9 @@ for(let z=-220;z<220;z+=13){const d=new THREE.Mesh(new THREE.BoxGeometry(.24,.09
 for(let x=-220;x<220;x+=13){const d=new THREE.Mesh(new THREE.BoxGeometry(5,.09,.24),line);d.position.set(x,.09,0);scene.add(d);}
 
 // Procedural blocks: buildings placed along streets, with gaps and varied heights
+const obstacles=[];
 function building(x,z,w,d,h,color){
- const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(color,.75));b.position.set(x,h/2,z);b.castShadow=true;b.receiveShadow=true;scene.add(b);
+ const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(color,.75));b.position.set(x,h/2,z);b.castShadow=true;b.receiveShadow=true;scene.add(b);obstacles.push({x,z,r:Math.sqrt(w*w+d*d)*.48,type:"building"});
  const roof=new THREE.Mesh(new THREE.BoxGeometry(w*1.03,.18,d*1.03),mat(0x77766f));roof.position.set(x,h+.08,z);scene.add(roof);
  // simple facade windows
  const winMat=new THREE.MeshStandardMaterial({color:0x8bb8c8,roughness:.3,metalness:.15});
@@ -114,10 +119,18 @@ for(let bx=-200;bx<=200;bx+=28){
 }
 function tree(x,z){
  const t=new THREE.Mesh(new THREE.CylinderGeometry(.22,.35,2.4,7),trunkMat);t.position.set(x,1.2,z);t.castShadow=true;scene.add(t);
- const leaves=new THREE.Mesh(new THREE.SphereGeometry(1.5,8,7),treeMat);leaves.position.set(x,3,z);leaves.castShadow=true;scene.add(leaves);
+ const leaves=new THREE.Mesh(new THREE.SphereGeometry(1.5,8,7),treeMat);leaves.position.set(x,3,z);leaves.castShadow=true;scene.add(leaves);obstacles.push({x,z,r:1.55,type:"tree"});
 }
 for(let z=-220;z<220;z+=12){tree(13,z);tree(-13,z);tree(83,z);tree(-83,z)}
 for(let x=-220;x<220;x+=12){tree(x,13);tree(x,-13);tree(x,83);tree(x,-83)}
+// Mountain rim around the playable area: decorative hills, with a soft invisible boundary
+const mountainMat=mat(0x607e65), mountainTopMat=mat(0x8ca58a);
+for(let i=0;i<32;i++){
+ const t=i/32*Math.PI*2, r=226+(Math.random()*8);
+ const x=Math.cos(t)*r,z=Math.sin(t)*r,h=24+Math.random()*26,rad=18+Math.random()*12;
+ const hill=new THREE.Mesh(new THREE.ConeGeometry(rad,h,7),mountainMat);hill.position.set(x,h/2-1,z);hill.rotation.y=Math.random()*Math.PI;hill.castShadow=true;scene.add(hill);
+ const cap=new THREE.Mesh(new THREE.ConeGeometry(rad*.55,h*.25,7),mountainTopMat);cap.position.set(x,h*.84,z);cap.rotation.y=hill.rotation.y;scene.add(cap);
+}
 
 // Car model, facing -Z
 const car=new THREE.Group();scene.add(car);
@@ -138,13 +151,16 @@ car.position.set(0,0,0);
 const cloudMat=new THREE.MeshStandardMaterial({color:0xffffff,transparent:true,opacity:.75});
 for(let i=0;i<16;i++){const g=new THREE.Group();for(let j=0;j<4;j++){const p=new THREE.Mesh(new THREE.SphereGeometry(2+Math.random()*2,8,7),cloudMat);p.position.set(j*2.3,Math.random()*1.4,Math.random()*1.4);g.add(p)}g.position.set((Math.random()-.5)*240,35+Math.random()*20,(Math.random()-.5)*240);scene.add(g)}
 
-// Input: keyboard + touch buttons
+// Input: keyboard + touch buttons, reverse gear toggle
 const keys={left:false,right:false,gas:false,brake:false};
 function bindHold(id,key){const el=document.getElementById(id);const down=e=>{e.preventDefault();keys[key]=true;el.classList.add('active')};const up=e=>{e.preventDefault();keys[key]=false;el.classList.remove('active')};el.addEventListener('pointerdown',down);['pointerup','pointercancel','pointerleave'].forEach(t=>el.addEventListener(t,up))}
 bindHold('left','left');bindHold('right','right');bindHold('gas','gas');bindHold('brake','brake');
-addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='a')keys.left=true;if(e.key==='ArrowRight'||e.key==='d')keys.right=true;if(e.key==='ArrowUp'||e.key==='w')keys.gas=true;if(e.key==='ArrowDown'||e.key==='s')keys.brake=true});
+let reverse=false;
+function toggleReverse(){if(Math.abs(velocity)>1.5)return;reverse=!reverse;document.getElementById('gear').textContent='GEAR: '+(reverse?'R':'D');document.getElementById('reverse').classList.toggle('active',reverse)}
+document.getElementById('reverse').addEventListener('click',toggleReverse);
+addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='a')keys.left=true;if(e.key==='ArrowRight'||e.key==='d')keys.right=true;if(e.key==='ArrowUp'||e.key==='w')keys.gas=true;if(e.key==='ArrowDown'||e.key==='s')keys.brake=true;if(e.key.toLowerCase()==='r')toggleReverse()});
 addEventListener('keyup',e=>{if(e.key==='ArrowLeft'||e.key==='a')keys.left=false;if(e.key==='ArrowRight'||e.key==='d')keys.right=false;if(e.key==='ArrowUp'||e.key==='w')keys.gas=false;if(e.key==='ArrowDown'||e.key==='s')keys.brake=false});
-let velocity=0,steer=0,heading=0,setting='sunset',rain=false;
+let velocity=0,steer=0,heading=0,setting='sunset',rain=false,damage=0;
 const panel=document.getElementById('panel');
 document.getElementById('openSettings').onclick=()=>panel.style.display='block';
 document.getElementById('closeSettings').onclick=()=>panel.style.display='none';
@@ -160,7 +176,49 @@ applyEnvironment('sunset');
 
 let last=performance.now();
 function animate(now){
- requestAnimationFrame(animate);const dt=Math.min((now-last)/1000,.04);last=now;
+ requestAnimationFrame(animate);const dt=Math.min((now-last)/1000,.035);last=now;
+ const assist=document.getElementById('assist').value==='on';
+ const maxForward=assist?22:34,maxReverse=assist?8:12;
+ // Throttle direction is selected by gear. Brake always slows toward zero.
+ if(keys.gas){const target=reverse?-maxReverse:maxForward;velocity+=Math.sign(target-velocity)*(assist?7:10)*dt;if((target-velocity)*Math.sign(target)<0)velocity=target;velocity=THREE.MathUtils.clamp(velocity,-maxReverse,maxForward)}
+ else velocity*=Math.pow(.992,dt*60);
+ if(keys.brake){if(velocity>0)velocity=Math.max(0,velocity-24*dt);else if(velocity<0)velocity=Math.min(0,velocity+24*dt)}
+ const steerTarget=(keys.left?1:0)-(keys.right?1:0);
+ steer=THREE.MathUtils.lerp(steer,steerTarget,dt*7);
+ // Steering is speed-based and reverses direction naturally when backing up.
+ const speedFactor=Math.min(Math.abs(velocity)/7,1);
+ const turnRate=(assist?1.0:1.35)*speedFactor*steer*(velocity>=0?1:-1);
+ heading+=turnRate*dt;
+ car.rotation.y=heading;
+ const forward=new THREE.Vector3(Math.sin(heading),0,-Math.cos(heading));
+ const oldPos=car.position.clone();
+ car.position.addScaledVector(forward,velocity*dt);
+ // Collision checks against buildings and trees. A hit stops the car, nudges it away and adds damage.
+ let hit=null;
+ for(const ob of obstacles){const dx=car.position.x-ob.x,dz=car.position.z-ob.z,dist=Math.hypot(dx,dz);if(dist<ob.r+2.0){hit=ob;break}}
+ // Soft perimeter boundary backed by visible mountains; cannot drive off the map.
+ const edge=Math.hypot(car.position.x,car.position.z);
+ if(!hit&&edge>205)hit={x:car.position.x/Math.max(edge,1)*205,z:car.position.z/Math.max(edge,1)*205,r:0,type:'boundary'};
+ if(hit){
+  car.position.copy(oldPos);
+  const impactSpeed=Math.abs(velocity);
+  velocity*= -0.12;
+  const impact=Math.min(22,impactSpeed*.75+2);damage=Math.min(100,damage+impact);
+  bodyMat.color.lerp(new THREE.Color(0x6c7279),damage/115);
+  // brief collision shake
+  camera.position.x+=(Math.random()-.5)*.25;camera.position.y+=(Math.random()-.5)*.15;
+  if(hit.type==='boundary'){car.position.x*=.985;car.position.z*=.985}
+ }
+ // Camera follows smoothly with a slight dynamic distance based on speed
+ const camOffset=new THREE.Vector3(0,4.3,9.5+Math.min(Math.abs(velocity)*.06,2)).applyAxisAngle(new THREE.Vector3(0,1,0),heading);
+ const targetCam=car.position.clone().add(camOffset);
+ camera.position.lerp(targetCam,1-Math.pow(.001,dt));
+ camera.lookAt(car.position.clone().add(new THREE.Vector3(0,1.1,0)));
+ document.getElementById('speed').innerHTML=Math.round(Math.abs(velocity)*3.6)+' <small>km/h</small>';
+ document.getElementById('damage').textContent='Vehicle condition: '+Math.max(0,100-Math.round(damage))+'%';
+ renderer.render(scene,camera);
+}
+requestAnimationFrame(animate);const dt=Math.min((now-last)/1000,.04);last=now;
  const assist=document.getElementById('assist').value==='on';
  if(keys.gas)velocity=Math.min(velocity+ (assist?8:11)*dt,assist?24:38);
  else velocity*=Math.pow(.985,dt*60);
